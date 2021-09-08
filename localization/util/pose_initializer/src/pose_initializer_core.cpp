@@ -41,6 +41,7 @@ double getGroundHeight(const pcl::PointCloud<pcl::PointXYZ>::Ptr pcdmap, const t
 PoseInitializer::PoseInitializer(ros::NodeHandle nh, ros::NodeHandle private_nh)
 : nh_(nh), private_nh_(private_nh), tf2_listener_(tf2_buffer_), map_frame_("map")
 {
+  ROS_INFO("[pose_initializer] pose initializer");
   initial_pose_sub_ = nh_.subscribe("initialpose", 10, &PoseInitializer::callbackInitialPose, this);
   map_points_sub_ = nh_.subscribe("pointcloud_map", 1, &PoseInitializer::callbackMapPoints, this);
 
@@ -103,12 +104,14 @@ bool PoseInitializer::serviceInitial(
 void PoseInitializer::callbackInitialPose(
   const geometry_msgs::PoseWithCovarianceStamped::ConstPtr & pose_cov_msg_ptr)
 {
+  ROS_INFO("[pose_initializer] get initial pose");
   gnss_pose_sub_.shutdown();  // get only first topic
-
+  ROS_INFO("[pose_initializer] gnss");
+  
   geometry_msgs::PoseWithCovarianceStamped::Ptr add_height_pose_msg_ptr(
     new geometry_msgs::PoseWithCovarianceStamped);
   getHeight(*pose_cov_msg_ptr, add_height_pose_msg_ptr);
-
+  ROS_INFO("[pose_initializer] get height");
   // TODO
   add_height_pose_msg_ptr->pose.covariance[0] = 2.0;
   add_height_pose_msg_ptr->pose.covariance[1 * 6 + 1] = 2.0;
@@ -120,8 +123,10 @@ void PoseInitializer::callbackInitialPose(
   geometry_msgs::PoseWithCovarianceStamped::Ptr aligned_pose_msg_ptr(
     new geometry_msgs::PoseWithCovarianceStamped);
   const bool succeeded_align = callAlignService(*add_height_pose_msg_ptr, aligned_pose_msg_ptr);
+  ROS_INFO("[pose_initializer] called ndt server");
 
   if (succeeded_align) {
+    ROS_INFO("[pose_initializer] succeeded_align");
     initial_pose_pub_.publish(*aligned_pose_msg_ptr);
   }
 }

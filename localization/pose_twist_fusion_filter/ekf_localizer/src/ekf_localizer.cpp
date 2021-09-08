@@ -47,7 +47,7 @@ EKFLocalizer::EKFLocalizer() : nh_(""), pnh_("~"), dim_x_(6 /* x, y, yaw, yaw_bi
   pnh_.param("twist_rate", twist_rate_, double(10.0));  // used for covariance calculation
   pnh_.param("twist_gate_dist", twist_gate_dist_, double(10000.0));  // Mahalanobis limit
   pnh_.param("twist_stddev_vx", twist_stddev_vx_, double(0.2));
-  pnh_.param("twist_stddev_wz", twist_stddev_wz_, double(0.03));
+  pnh_.param("twist_stddev_wz", twist_stddev_wz_, double(0.09));
   pnh_.param("use_twist_with_covariance", use_twist_with_covariance_, bool(false));
 
   /* process noise */
