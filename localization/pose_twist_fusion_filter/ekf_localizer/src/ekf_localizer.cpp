@@ -31,6 +31,7 @@ EKFLocalizer::EKFLocalizer() : nh_(""), pnh_("~"), dim_x_(6 /* x, y, yaw, yaw_bi
   pnh_.param("enable_yaw_bias_estimation", enable_yaw_bias_estimation_, bool(true));
   pnh_.param("extend_state_step", extend_state_step_, int(50));
   pnh_.param("pose_frame_id", pose_frame_id_, std::string("map"));
+  pnh_.param("use_2d_mode", use_2d_mode_, false);
 
   /* pose measurement */
   pnh_.param("pose_additional_delay", pose_additional_delay_, double(0.0));
@@ -59,7 +60,6 @@ EKFLocalizer::EKFLocalizer() : nh_(""), pnh_("~"), dim_x_(6 /* x, y, yaw, yaw_bi
   if (!enable_yaw_bias_estimation_) {
     proc_stddev_yaw_bias_c = 0.0;
   }
-
   /* convert to continuous to discrete */
   proc_cov_vx_d_ = std::pow(proc_stddev_vx_c * ekf_dt_, 2.0);
   proc_cov_wz_d_ = std::pow(proc_stddev_wz_c * ekf_dt_, 2.0);
@@ -92,6 +92,17 @@ EKFLocalizer::EKFLocalizer() : nh_(""), pnh_("~"), dim_x_(6 /* x, y, yaw, yaw_bi
 
   initEKF();
 
+  geometry_msgs::TransformStamped transform;
+  tf2_ros::Buffer tf_buffer;
+  tf2_ros::TransformListener tf_listener(tf_buffer);
+  ros::Duration(0.1).sleep();
+  try {
+    transform = tf_buffer.lookupTransform("base_link", "base_footprint", ros::Time(0));
+  } catch (tf2::TransformException & ex) {
+    ROS_WARN("%s", ex.what());
+    ros::Duration(0.1).sleep();
+  }
+  base_height_ = std::abs(transform.transform.translation.z);
   /* debug */
   pub_debug_ = pnh_.advertise<std_msgs::Float64MultiArray>("debug", 1);
   pub_measured_pose_ = pnh_.advertise<geometry_msgs::PoseStamped>("debug/measured_pose", 1);
@@ -169,7 +180,11 @@ void EKFLocalizer::setCurrentResult()
   tf2::Quaternion q_tf;
   double roll, pitch, yaw;
   if (current_pose_ptr_ != nullptr) {
-    current_ekf_pose_.pose.position.z = current_pose_ptr_->pose.position.z;
+    if (use_2d_mode_) {
+      current_ekf_pose_.pose.position.z = base_height_;
+    } else {
+      current_ekf_pose_.pose.position.z = current_pose_ptr_->pose.position.z;
+    }
     tf2::fromMsg(current_pose_ptr_->pose.orientation, q_tf); /* use Pose pitch and roll */
     tf2::Matrix3x3(q_tf).getRPY(roll, pitch, yaw);
   } else {
@@ -205,10 +220,26 @@ void EKFLocalizer::timerTFCallback(const ros::TimerEvent & e)
   transformStamped.transform.translation.y = current_ekf_pose_.pose.position.y;
   transformStamped.transform.translation.z = current_ekf_pose_.pose.position.z;
 
-  transformStamped.transform.rotation.x = current_ekf_pose_.pose.orientation.x;
-  transformStamped.transform.rotation.y = current_ekf_pose_.pose.orientation.y;
-  transformStamped.transform.rotation.z = current_ekf_pose_.pose.orientation.z;
-  transformStamped.transform.rotation.w = current_ekf_pose_.pose.orientation.w;
+  if (!isnan(current_ekf_pose_.pose.orientation.x)) {
+    transformStamped.transform.rotation.x = current_ekf_pose_.pose.orientation.x;
+  } else {
+    transformStamped.transform.rotation.x = 0;
+  }
+  if (!isnan(current_ekf_pose_.pose.orientation.y)) {
+    transformStamped.transform.rotation.y = current_ekf_pose_.pose.orientation.y;
+  } else {
+    transformStamped.transform.rotation.y = 0;
+  }
+  if (!isnan(current_ekf_pose_.pose.orientation.z)) {
+    transformStamped.transform.rotation.z = current_ekf_pose_.pose.orientation.z;
+  } else {
+    transformStamped.transform.rotation.z = 0;
+  }
+  if (!isnan(current_ekf_pose_.pose.orientation.w)) {
+    transformStamped.transform.rotation.w = current_ekf_pose_.pose.orientation.w;
+  } else {
+    transformStamped.transform.rotation.w = 1;
+  }
 
   tf_br_.sendTransform(transformStamped);
 }
@@ -667,6 +698,32 @@ void EKFLocalizer::publishEstimateResult()
   ekf_.getLatestP(P);
 
   /* publish latest pose */
+  if (isnan(current_ekf_pose_.pose.orientation.x)) {
+    current_ekf_pose_.pose.orientation.x = 0;
+  }
+  if (isnan(current_ekf_pose_.pose.orientation.y)) {
+    current_ekf_pose_.pose.orientation.y = 0;
+  }
+  if (isnan(current_ekf_pose_.pose.orientation.z)) {
+    current_ekf_pose_.pose.orientation.z = 0;
+  }
+  if (isnan(current_ekf_pose_.pose.orientation.w)) {
+    current_ekf_pose_.pose.orientation.w = 1;
+  }
+
+  if (isnan(current_ekf_pose_no_yawbias_.pose.orientation.x)) {
+    current_ekf_pose_no_yawbias_.pose.orientation.x = 0;
+  }
+  if (isnan(current_ekf_pose_no_yawbias_.pose.orientation.y)) {
+    current_ekf_pose_no_yawbias_.pose.orientation.y = 0;
+  }
+  if (isnan(current_ekf_pose_no_yawbias_.pose.orientation.z)) {
+    current_ekf_pose_no_yawbias_.pose.orientation.z = 0;
+  }
+  if (isnan(current_ekf_pose_no_yawbias_.pose.orientation.w)) {
+    current_ekf_pose_no_yawbias_.pose.orientation.w = 1;
+  }
+
   pub_pose_.publish(current_ekf_pose_);
   pub_pose_no_yawbias_.publish(current_ekf_pose_no_yawbias_);
 

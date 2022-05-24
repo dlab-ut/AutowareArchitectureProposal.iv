@@ -91,7 +91,8 @@ private:
   double pose_stddev_yaw_;          //!< @brief  standard deviation for pose position yaw [rad]
   bool use_pose_with_covariance_;   //!< @brief  use covariance in pose_with_covariance message
   bool use_twist_with_covariance_;  //!< @brief  use covariance in twist_with_covariance message
-
+  bool use_2d_mode_;
+  double base_height_;
   /* twist */
   double
     twist_additional_delay_;  //!< @brief  compensated delay = (twist.header.stamp - now) + additional_delay [s]
